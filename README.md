@@ -1,2 +1,2 @@
 # File-System
-Repositório dedicado ao trabalho de Sistemas Operacionais II, onde o objetivo é desenvolver um sistema de arquivos funcional.
+Repositório relacionado ao trabalho de sistemas operacionais II, que consiste em criar um sistema de arquivos baseado em ext3/ext4 utilizando i-nodes e salvando os arquivos em memória.
