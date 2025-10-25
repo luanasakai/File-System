@@ -55,28 +55,42 @@ void remover_arquivo(const char *nome_arquivo) {
 }
 
 void listar_diretorio() {
+    char tipo;
+
+    sprintf(diretorio_atual, "fs/blocks/%d.dat", inode_atual);
+    FILE *dir = fopen(diretorio_atual, "rb");
+    if (!dir) {
+        printf("Erro: não foi possível abrir diretório atual\n");
+        return;
+    }
+    
     printf("\nTipo  Inode  Nome                Tamanho\n");
     printf("----  -----  ----                -------\n");
     
-    FILE *diretorio_atual = fopen("fs/blocks/0.dat", "rb");
     ENTRADA_DIRETORIO entradas[8];
-    fread(entradas, sizeof(ENTRADA_DIRETORIO), 8, diretorio_atual);
-    fclose(diretorio_atual);
+    fread(entradas, sizeof(ENTRADA_DIRETORIO), 8, dir);
+    fclose(dir);
     
+    FILE *arquivo_inodes = fopen("fs/inodes.dat", "rb");
+    if (!arquivo_inodes) {
+        printf("Erro: não foi possível abrir arquivo de inodes\n");
+        return;
+    }
+
     for (int i = 0; i < 8; i++) {
         if (entradas[i].nome_arquivo[0] != '\0') {
-            FILE *arquivo_inodes = fopen("fs/inodes.dat", "rb");
             INODE node;
             fseek(arquivo_inodes, entradas[i].numero_inode * sizeof(INODE), SEEK_SET);
             fread(&node, sizeof(INODE), 1, arquivo_inodes);
-            fclose(arquivo_inodes);
             
-            char tipo = (node.tipo == 2) ? 'd' : 'f';
+            tipo = (node.tipo == 2) ? 'd' : 'f'; // d = diretório, f = arquivo
             printf("%c     %-6d %-18s %d\n", 
                    tipo, entradas[i].numero_inode, 
                    entradas[i].nome_arquivo, node.tamanho);
         }
     }
+
+    fclose(arquivo_inodes);
 }
 
 void mostrar_conteudo_arquivo(const char *nome_arquivo) {
