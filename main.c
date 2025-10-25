@@ -1,9 +1,6 @@
 #include "estrutura.h"
 #include "comandos.h"
 
-char caminho_atual[256] = "/";
-unsigned char inode_atual = 1;
-
 int main() {  
     char comando[256];
     char arg1[256];
@@ -29,6 +26,9 @@ int main() {
         if (sscanf(comando, "mkdir %255s", arg1) == 1) {
             criar_diretorio(arg1);
         }
+        /*  O usuário digitou algo como: cd documentos
+            O sscanf extrai a palavra depois de "cd " e guarda na variável arg1
+            ou seja, agora arg1 = "documentos"*/
         else if (sscanf(comando, "cd %255s", arg1) == 1) {
             mudar_diretorio(arg1);
         }

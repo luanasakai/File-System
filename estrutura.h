@@ -37,8 +37,8 @@ typedef struct sSuperbloco {
     int total_inodes;
 } SUPERBLOCO;
 
-extern char caminho_atual[256];
-extern unsigned char inode_atual;
+char caminho_atual[256];
+unsigned char inode_atual;
 
 
 int encontrar_inode_livre();
