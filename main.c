@@ -22,13 +22,9 @@ int main() {
         if (strlen(comando) == 0) {
             continue;
         }
-        
-        if (sscanf(comando, "mkdir %255s", arg1) == 1) {
+        else if (sscanf(comando, "mkdir %255s", arg1) == 1) {
             criar_diretorio(arg1);
         }
-        /*  O usuário digitou algo como: cd documentos
-            O sscanf extrai a palavra depois de "cd " e guarda na variável arg1
-            ou seja, agora arg1 = "documentos"*/
         else if (sscanf(comando, "cd %255s", arg1) == 1) {
             mudar_diretorio(arg1);
         }

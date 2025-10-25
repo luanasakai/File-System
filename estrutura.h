@@ -38,6 +38,7 @@ typedef struct sSuperbloco {
 } SUPERBLOCO;
 
 char caminho_atual[256];
+char diretorio_atual[64];
 unsigned char inode_atual;
 
 
