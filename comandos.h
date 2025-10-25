@@ -1,6 +1,7 @@
 
 /*TO-DO: 
-    [] TROCAR DE DIRETORIO
+    [ok] TROCAR DE DIRETORIO
+    []. e .. nao funcionam
     [] REMOVER ARQUIVOS E DIRETORIOS
     [] SAIR DE UM ARQUIVO
 */
@@ -133,23 +134,32 @@ void imprimir_diretorio_atual() {
    LOCALIZAR DIRETORIO*/
 
 void mudar_diretorio(const char *caminho) {
+    unsigned char inode_pai;
     // -----------------------------------
-    // Caso 1: cd /
+    // Caso 0: cd . - permanece no diretório atual
     // -----------------------------------
-    if (strcmp(caminho, "/") == 0) {
-        strcpy(caminho_atual, "/");
-        inode_atual = 1; // inode da raiz
+    if (strcmp(caminho, ".") == 0) {
         return;
     }
 
     // -----------------------------------
-    // Caso 2: cd ..
+    // Caso 1: cd / - vai para raiz
+    // -----------------------------------
+    if (strcmp(caminho, "/") == 0) {
+        strcpy(caminho_atual, "/");
+        inode_atual = 0; // inode da raiz
+        return;
+    }
+
+    // -----------------------------------
+    // Caso 2: cd .. - vai para diretório pai
     // -----------------------------------
     if (strcmp(caminho, "..") == 0) {
-        if (strcmp(caminho_atual, "/") == 0)
-            return; // já estamos na raiz, nada a fazer
+        if (strcmp(caminho_atual, "/") == 0) {
+            // já está na raiz
+            return;
+        }
 
-        // Abrimos diretório atual
         sprintf(diretorio_atual, "fs/blocks/%d.dat", inode_atual);
         FILE *dir = fopen(diretorio_atual, "rb");
         if (!dir) {
@@ -161,8 +171,8 @@ void mudar_diretorio(const char *caminho) {
         fread(entradas, sizeof(ENTRADA_DIRETORIO), 8, dir);
         fclose(dir);
 
-        // Procuramos a entrada ".."
-        unsigned char inode_pai = inode_atual; // default raiz
+        // procura o inode do diretório pai (“..”)
+        inode_pai = inode_atual;
         for (int i = 0; i < 8; i++) {
             if (strcmp(entradas[i].nome_arquivo, "..") == 0) {
                 inode_pai = entradas[i].numero_inode;
@@ -170,17 +180,19 @@ void mudar_diretorio(const char *caminho) {
             }
         }
 
-        // Atualiza inode atual
         inode_atual = inode_pai;
 
         // Atualiza caminho_atual removendo a última pasta
         if (strcmp(caminho_atual, "/") != 0) {
             char *ultima_barra = strrchr(caminho_atual, '/');
-            if (ultima_barra != caminho_atual) {
-                *ultima_barra = '\0'; // remove pasta
-                strcat(caminho_atual, "/"); // garante barra
-            } else {
-                strcpy(caminho_atual, "/"); // volta para raiz
+
+            // caso "/usr/" → vira "/"
+            if (ultima_barra == caminho_atual) {
+                strcpy(caminho_atual, "/");
+            } else if (ultima_barra) {
+                *ultima_barra = '\0'; // corta no último '/'
+                if (caminho_atual[strlen(caminho_atual) - 1] != '/')
+                    strcat(caminho_atual, "/");
             }
         }
         return;
@@ -190,7 +202,6 @@ void mudar_diretorio(const char *caminho) {
     // Caso 3: cd <nome_diretorio>
     // -----------------------------------
     sprintf(diretorio_atual, "fs/blocks/%d.dat", inode_atual);
-
     FILE *dir = fopen(diretorio_atual, "rb");
     if (!dir) {
         printf("Erro: não foi possível abrir diretório atual\n");
@@ -208,107 +219,153 @@ void mudar_diretorio(const char *caminho) {
 
             INODE node;
             FILE *arquivo_inodes = fopen("fs/inodes.dat", "rb");
+            if (!arquivo_inodes) {
+                printf("Erro: não foi possível abrir inodes.dat\n");
+                return;
+            }
+
             fseek(arquivo_inodes, entradas[i].numero_inode * sizeof(INODE), SEEK_SET);
             fread(&node, sizeof(INODE), 1, arquivo_inodes);
             fclose(arquivo_inodes);
 
-            if (node.tipo == 2) { // é diretório
-                // Remove barra extra se necessário
+            if (node.tipo == 2) { // tipo 2 → diretório
+                inode_atual = entradas[i].numero_inode;
+                encontrado = 1;
+
+                // Atualiza o caminho atual corretamente
                 if (strcmp(caminho_atual, "/") != 0)
                     strcat(caminho_atual, caminho);
                 else
                     strcat(caminho_atual, caminho);
 
-                // Garante barra no final
-                if (caminho_atual[strlen(caminho_atual)-1] != '/')
+                if (caminho_atual[strlen(caminho_atual) - 1] != '/')
                     strcat(caminho_atual, "/");
 
-                inode_atual = entradas[i].numero_inode;
-                encontrado = 1;
                 break;
             }
         }
     }
 
-    if (!encontrado)
+    if (!encontrado) {
         printf("Erro: Diretório '%s' não encontrado ou não é diretório\n", caminho);
+    }
 }
 
+
 void criar_diretorio(const char *nome_diretorio) {
+    int novo_inode = 0, novo_bloco = 0;
+    char caminho_bloco[256];
+
     if (strlen(nome_diretorio) > TAMANHO_NOME_ARQUIVO - 1) {
-        printf("Erro: Nome do diretório muito longo\n");
-        return;
-    }
-    
-    int novo_inode = encontrar_inode_livre();
-    if (novo_inode == -1) {
-        printf("Erro: Não há i-nodes livres disponíveis\n");
-        return;
-    }
-    
-    int novo_bloco = encontrar_bloco_livre();
-    if (novo_bloco == -1) {
-        printf("Erro: Não há blocos livres disponíveis\n");
+        printf("\nErro: Nome do diretório muito longo\n");
         return;
     }
 
+    // --------------------------------------------------
+    // Alocar inode e bloco livres
+    // --------------------------------------------------
+    novo_inode = encontrar_inode_livre();
+    novo_bloco = encontrar_bloco_livre();
+
+    if (novo_inode == -1 || novo_bloco == -1) {
+        printf("Erro: Não há inode ou bloco livre disponível\n");
+        return;
+    }
+
+    // --------------------------------------------------
+    // Criar o inode do novo diretório
+    // --------------------------------------------------
     FILE *arquivo_inodes = fopen("fs/inodes.dat", "r+b");
-    INODE novo_inode_dir = {
-        .tipo = 2,
-        .tamanho = 2,
-        .blocos[0] = novo_bloco
-    };
+    if (!arquivo_inodes) {
+        printf("Erro: não foi possível abrir inodes.dat\n");
+        return;
+    }
+
+    INODE novo_inode_dir = {0};
+    novo_inode_dir.tipo = 2;               // diretório
+    novo_inode_dir.tamanho = 2;            // contém "." e ".."
+    novo_inode_dir.blocos[0] = novo_bloco; // primeiro bloco de dados
+
     fseek(arquivo_inodes, novo_inode * sizeof(INODE), SEEK_SET);
     fwrite(&novo_inode_dir, sizeof(INODE), 1, arquivo_inodes);
     fclose(arquivo_inodes);
 
-    FILE *bloco_dir = fopen("fs/blocks/0.dat", "r+b");
-    ENTRADA_DIRETORIO entradas[8];
-    fread(entradas, sizeof(ENTRADA_DIRETORIO), 8, bloco_dir);
+    // --------------------------------------------------
+    // Adicionar entrada no diretório atual (pai)
+    // --------------------------------------------------
+    sprintf(diretorio_atual, "fs/blocks/%d.dat", inode_atual);
+    FILE *dir_pai = fopen(diretorio_atual, "r+b");
+    if (!dir_pai) {
+        printf("Erro: não foi possível abrir diretório atual\n");
+        return;
+    }
+
+    ENTRADA_DIRETORIO entradas[8] = {0};
+    fread(entradas, sizeof(ENTRADA_DIRETORIO), 8, dir_pai);
 
     int slot_livre = -1;
-    for (int i = 2; i < 8; i++) {
+    for (int i = 2; i < 8; i++) { // posições 0 e 1 são "." e ".."
         if (entradas[i].nome_arquivo[0] == '\0') {
             slot_livre = i;
             break;
         }
     }
-    
+
     if (slot_livre == -1) {
         printf("Erro: Diretório está cheio\n");
+        fclose(dir_pai);
         return;
     }
 
     strcpy(entradas[slot_livre].nome_arquivo, nome_diretorio);
     entradas[slot_livre].numero_inode = novo_inode;
-    
-    fseek(bloco_dir, 0, SEEK_SET);
-    fwrite(entradas, sizeof(ENTRADA_DIRETORIO), 8, bloco_dir);
-    fclose(bloco_dir);
 
-    char caminho_bloco[256];
+    fseek(dir_pai, 0, SEEK_SET);
+    fwrite(entradas, sizeof(ENTRADA_DIRETORIO), 8, dir_pai);
+    fclose(dir_pai);
+
+    // --------------------------------------------------
+    // Criar o arquivo do novo diretório
+    // --------------------------------------------------
     sprintf(caminho_bloco, "fs/blocks/%d.dat", novo_bloco);
     FILE *novo_dir = fopen(caminho_bloco, "wb");
-    
+    if (!novo_dir) {
+        printf("Erro: não foi possível criar o arquivo do novo diretório\n");
+        return;
+    }
+
     ENTRADA_DIRETORIO novas_entradas[8] = {0};
+
+    // "." aponta para ele mesmo
     strcpy(novas_entradas[0].nome_arquivo, ".");
     novas_entradas[0].numero_inode = novo_inode;
+
+    // ".." aponta para o diretório pai
     strcpy(novas_entradas[1].nome_arquivo, "..");
     novas_entradas[1].numero_inode = inode_atual;
-    
+
     fwrite(novas_entradas, sizeof(ENTRADA_DIRETORIO), 8, novo_dir);
     fclose(novo_dir);
 
+    // --------------------------------------------------
+    // Atualizar o bitmap de blocos (freespace.dat)
+    // --------------------------------------------------
     FILE *espaco_livre = fopen("fs/freespace.dat", "r+b");
-    unsigned char bitmap[MAX_BLOCOS];
-    fread(bitmap, 1, MAX_BLOCOS, espaco_livre);
-    bitmap[novo_bloco] = 1;
-    fseek(espaco_livre, 0, SEEK_SET);
-    fwrite(bitmap, 1, MAX_BLOCOS, espaco_livre);
-    fclose(espaco_livre);
-    
-    printf("Diretório '%s' criado com sucesso\n", nome_diretorio);
+    if (espaco_livre) {
+        unsigned char bitmap[MAX_BLOCOS];
+        fread(bitmap, 1, MAX_BLOCOS, espaco_livre);
+        bitmap[novo_bloco] = 1; // marca o bloco como usado
+        fseek(espaco_livre, 0, SEEK_SET);
+        fwrite(bitmap, 1, MAX_BLOCOS, espaco_livre);
+        fclose(espaco_livre);
+    } else {
+        printf("\n Aviso: não foi possível atualizar freespace.dat\n");
+    }
+
+    printf("\n Diretório '%s' criado com sucesso (inode - %d | bloco - %d)\n",
+           nome_diretorio, novo_inode, novo_bloco);
 }
+
 
 void carregar_superbloco() {
     FILE *super = fopen("fs/superblock.dat", "rb");
@@ -322,11 +379,16 @@ void carregar_superbloco() {
 void inicializar_sistema_arquivos() {
     struct stat st;
     
+    /*1. Verifica se a pasta fs existe
+     2.Se não existir, cria o diretório com permissões 
+    755 (leitura/escrita/execução para dono, leitura/execução para outros)*/
     if (stat("fs", &st) == -1) {
         mkdir("fs", 0755);
     }
     
-    if (stat("fs/superblock.dat", &st) == -1) {
+    //Se o arquivo superblock.dat não existir, significa que é a primeira execução
+    if(stat("fs/superblock.dat", &st) == -1){
+        //cria as estruturas basicas do sistema de arquivos
         printf("Inicializando sistema de arquivos Luana e Maristela FS...\n");
         
         FILE *super = fopen("fs/superblock.dat", "wb");
@@ -371,7 +433,12 @@ void inicializar_sistema_arquivos() {
         fclose(bloco_raiz);
         
         printf("Sistema de arquivos inicializado com sucesso!\n");
-    }
     
+    }else{
+        //Se ja tiver sido incializado, inicializa o caminho e o inode
+        strcpy(caminho_atual, "/");
+        inode_atual = 0; // inode da raiz
+    }
+
     carregar_superbloco();
 }
