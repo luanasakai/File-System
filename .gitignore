@@ -1,0 +1,25 @@
+# Ignorar arquivos temporários
+*.log
+*.tmp
+*.bak
+
+# Ignorar diretórios
+__pycache__/
+node_modules/
+build/
+dist/
+
+# Ignorar configurações locais
+.env
+.vscode/
+.idea/
+
+# Ignorar binários ou executáveis
+*.exe
+*.out
+*.o
+
+# Ignorar arquivos do sistema
+.DS_Store
+Thumbs.db
+

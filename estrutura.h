@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,16 +16,16 @@
 
 typedef struct sEntrada_Diretorio {
     char nome_arquivo[TAMANHO_NOME_ARQUIVO];
-    unsigned char numero_inode;
+    char numero_inode;
 } ENTRADA_DIRETORIO;
 
 typedef struct sInode {
-    unsigned char tipo;
-    unsigned char tamanho;
-    unsigned char blocos[10]; 
-    unsigned char indireto_simples;
-    unsigned char tempo_criacao;
-    unsigned char tempo_modificacao;
+    char tipo; 
+    char tamanho;
+    char blocos[10]; 
+    char indireto_simples;
+    char tempo_criacao;
+    char tempo_modificacao;
 } INODE;
 
 typedef struct sSuperbloco {
@@ -39,13 +38,13 @@ typedef struct sSuperbloco {
 
 char caminho_atual[256];
 char diretorio_atual[64];
-unsigned char inode_atual;
+char inode_atual;
 
 
 int encontrar_inode_livre();
 int encontrar_bloco_livre();
 void mostrar_status();
-void remover_arquivo(const char *nome_arquivo);
+void remover_arquivo(char *nome_arquivo);
 void listar_diretorio();
 void mostrar_conteudo_arquivo(const char *nome_arquivo);
 void criar_arquivo(char *nome_arquivo);
