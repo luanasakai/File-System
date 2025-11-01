@@ -12,7 +12,7 @@
 #define TAMANHO_PARTICAO 10240
 #define MAX_BLOCOS 80
 #define MAX_INODES 64
-#define TAMANHO_NOME_ARQUIVO 14
+#define TAMANHO_NOME_ARQUIVO 32
 #define TAMANHO_INODE 32
 
 // Estrturas de dados dos componentes do sistema

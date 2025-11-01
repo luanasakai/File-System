@@ -282,10 +282,81 @@ void listar_diretorio(){
     fclose(arquivo_inodes);
 }
 
-void mostrar_conteudo_arquivo(const char *nome_arquivo){
-    printf("Conteúdo de '%s':\n", nome_arquivo);
-}
+void mostrar_conteudo_arquivo(const char *nome_arquivo) {
+    FILE *arquivo_inodes = fopen("fs/inodes.dat", "rb");
+    if (!arquivo_inodes) {
+        printf("Erro: não foi possível abrir inodes.dat\n");
+        return;
+    }
 
+    INODE inode_dir;
+    fseek(arquivo_inodes, inode_atual * sizeof(INODE), SEEK_SET);
+    fread(&inode_dir, sizeof(INODE), 1, arquivo_inodes);
+
+    int arquivo_inode = -1;
+    int encontrou = 0;
+
+    int i = 0;
+    while (i < 10 && !encontrou) {
+        int bloco_dir = inode_dir.blocos[i];
+        if (bloco_dir != 0) {
+            char caminho_bloco[64];
+            sprintf(caminho_bloco, "fs/blocks/%d.dat", bloco_dir);
+
+            FILE *bloco_fp = fopen(caminho_bloco, "rb");
+            if (bloco_fp) {
+                ENTRADA_DIRETORIO entradas[8];
+                fread(entradas, sizeof(ENTRADA_DIRETORIO), 8, bloco_fp);
+                fclose(bloco_fp);
+
+                int j = 0;
+                while (j < 8 && !encontrou) {
+                    if (strcmp(entradas[j].nome_arquivo, nome_arquivo) == 0) {
+                        arquivo_inode = entradas[j].numero_inode;
+                        encontrou = 1;
+                    }
+                    j++;
+                }
+            }
+        }
+        i++;
+    }
+
+    if (!encontrou || arquivo_inode == -1) {
+        printf("Erro: Arquivo '%s' não encontrado no diretório atual\n", nome_arquivo);
+        fclose(arquivo_inodes);
+        return;
+    }
+
+    INODE inode_arquivo;
+    fseek(arquivo_inodes, arquivo_inode * sizeof(INODE), SEEK_SET);
+    fread(&inode_arquivo, sizeof(INODE), 1, arquivo_inodes);
+    fclose(arquivo_inodes);
+
+    printf("Conteúdo de '%s':\n", nome_arquivo);
+
+    i = 0;
+    while (i < 10) {
+        int bloco_dado = inode_arquivo.blocos[i];
+        if (bloco_dado != 0) {
+            char caminho_bloco[64];
+            sprintf(caminho_bloco, "fs/blocks/%d.dat", bloco_dado);
+
+            FILE *bloco_fp = fopen(caminho_bloco, "rb");
+            if (bloco_fp) {
+                char buffer[TAMANHO_BLOCO + 1] = {0};
+                fread(buffer, 1, TAMANHO_BLOCO, bloco_fp);
+                printf("%s", buffer);
+                fclose(bloco_fp);
+            } else {
+                printf("Erro ao abrir bloco %d\n", bloco_dado);
+            }
+        }
+        i++;
+    }
+
+    printf("\n");
+}
 
 /*
 1. Recebe o número do inode de um diretório, o nome da entrada, e o inode que essa entrada deve apontar.
@@ -341,6 +412,7 @@ int criar_entrada_diretorio(int inode_diretorio, const char *nome, int inode_des
     printf("Erro: Diretório cheio (%d), não há espaço para '%s'\n", inode_diretorio, nome);
     return -1;
 }
+
 void criar_arquivo(char *nome_arquivo) {
     int novo_bloco;
     char caminho_bloco[64];
@@ -556,64 +628,6 @@ void mudar_diretorio(const char *caminho){
     }
 }
 
-
-void criar_diretorio(const char *nome_diretorio) {
-    if (strlen(nome_diretorio) > TAMANHO_NOME_ARQUIVO - 1) {
-        printf("\nErro: Nome do diretório muito longo\n");
-        return;
-    }
-
-    int novo_inode = encontrar_inode_livre();
-    int novo_bloco = encontrar_bloco_livre();
-
-    if (novo_inode == -1 || novo_bloco == -1) {
-        printf("Erro: Não há inode ou bloco livre disponível\n");
-        return;
-    }
-
-    FILE *arquivo_inodes = fopen("fs/inodes.dat", "rb+");
-    if (!arquivo_inodes) {
-        printf("Erro: não foi possível abrir inodes.dat\n");
-        return;
-    }
-
-    INODE novo_inode_dir = {0};
-    novo_inode_dir.tipo = 2; // diretório
-    novo_inode_dir.tamanho = 2; // "." e ".."
-    novo_inode_dir.blocos[0] = novo_bloco;
-
-    fseek(arquivo_inodes, novo_inode * sizeof(INODE), SEEK_SET);
-    fwrite(&novo_inode_dir, sizeof(INODE), 1, arquivo_inodes);
-    fclose(arquivo_inodes);
-
-    // Registrar o novo diretório no diretório pai
-    if (criar_entrada_diretorio(inode_atual, nome_diretorio, novo_inode) == -1) {
-        printf("Erro ao adicionar diretório '%s' no diretório pai\n", nome_diretorio);
-        return;
-    }
-
-    // Criar o arquivo com as entradas "." e ".."
-    char caminho_bloco[64];
-    sprintf(caminho_bloco, "fs/blocks/%d.dat", novo_bloco);
-    FILE *novo_dir = fopen(caminho_bloco, "wb");
-    if (!novo_dir) {
-        printf("Erro: não foi possível criar o arquivo do novo diretório\n");
-        return;
-    }
-
-    ENTRADA_DIRETORIO entradas[8] = {0};
-    strcpy(entradas[0].nome_arquivo, ".");
-    entradas[0].numero_inode = novo_inode;
-    strcpy(entradas[1].nome_arquivo, "..");
-    entradas[1].numero_inode = inode_atual;
-
-    fwrite(entradas, sizeof(ENTRADA_DIRETORIO), 8, novo_dir);
-    fclose(novo_dir);
-
-    printf("\nDiretório '%s' criado com sucesso (inode: %d | bloco: %d)\n", nome_diretorio, novo_inode, novo_bloco);
-}
-
-/*
 void criar_diretorio(const char *nome_diretorio){
     int novo_inode = 0, novo_bloco = 0;
     char caminho_bloco[256];
@@ -743,7 +757,7 @@ void criar_diretorio(const char *nome_diretorio){
 
     printf("\nDiretório '%s' criado com sucesso (inode - %d | bloco - %d)\n",
            nome_diretorio, novo_inode, novo_bloco);
-}*/
+}
 
 void carregar_superbloco(){
     FILE *super = fopen("fs/superblock.dat", "rb");
